@@ -22,8 +22,9 @@ tvinit(void) // trap vectors init
   for(i = 0; i < 256; i++)
     SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
                                                 // default: kernel mode(0)
-  SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
+  SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL ], DPL_USER);
                                                 // only int T_SYSCALL can be called from user-level
+  SETGATE(idt[T_INT128], 1, SEG_KCODE<<3, vectors[T_INT128], DPL_USER);
   initlock(&tickslock, "time");
 }
 
@@ -46,7 +47,7 @@ trap(struct trapframe *tf)
       exit();
     return;
   }
-
+  
   switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
@@ -77,6 +78,10 @@ trap(struct trapframe *tf)
     cprintf("cpu%d: spurious interrupt at %x:%x\n",
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
+    break;
+  case T_INT128:
+    cprintf("user interrupt %d called!\n", tf->trapno);
+    myproc()->killed = 1;
     break;
 
   //PAGEBREAK: 13
