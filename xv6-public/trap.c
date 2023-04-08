@@ -47,6 +47,11 @@ trap(struct trapframe *tf)
       exit();
     return;
   }
+
+  if(tf->trapno == T_USERCALL) { // T_INT128 ?
+    mycall();
+    exit(); // user가 exit을 해줘야 정상적으로 process가 종료될 수 있음
+  }
   
   switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:
@@ -79,10 +84,10 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
-  case T_INT128:
-    cprintf("user interrupt %d called!\n", tf->trapno);
-    myproc()->killed = 1;
-    break;
+  // case T_INT128:
+  //   cprintf("user interrupt %d called!\n", tf->trapno);
+  //   myproc()->killed = 1;
+  //   break;
 
   //PAGEBREAK: 13
   default:
