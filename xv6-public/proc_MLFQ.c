@@ -10,6 +10,8 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+
+  struct mlfqQueue queue[NQUEUE]; // 각 level의 queue에서 가지고 있는 RUNNABLE한 process의 개수
 } ptable;
 
 static struct proc *initproc;

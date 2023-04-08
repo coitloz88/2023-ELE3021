@@ -33,6 +33,9 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum queueLevel { TOP = 0, MIDDLE, LOW };
+
+#define TIME_QUANTUM(LEVEL) (2 * LEVEL) + 4
 
 // Per-process state
 struct proc {
@@ -49,6 +52,16 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // MLFQ Scheduling-related variables
+  enum queueLevel qlevel;   // Level of MLFQ
+  int priority;     // Priority of each process
+  int usedTime;     // Time passed during execution
+};
+
+struct mlfqQueue {
+  proc* queueFront;
+  int processCnt;
 };
 
 // Process memory is laid out contiguously, low addresses first:
