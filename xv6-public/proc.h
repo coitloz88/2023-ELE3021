@@ -60,7 +60,7 @@ struct proc {
 };
 
 struct mlfQueue {
-  struct proc* queueFront;      // head of the MLFQ
+  struct proc* queueFront;      // head of the MLFQ (recent executed process)
   int processCnt;               // RUNNABLE process number in queue
 };
 

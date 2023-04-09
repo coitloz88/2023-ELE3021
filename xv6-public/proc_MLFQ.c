@@ -96,7 +96,7 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   p->qLevel= TOP;
-  p->priority = 0;
+  p->priority = 3;
   p->execTime = 0;
 
   release(&ptable.lock);
@@ -200,6 +200,8 @@ resetproc(struct proc* p) {
 
   p->execTime = 0;
   p->qLevel = TOP;
+
+  //TODO: priority reset?
 
   release(&ptable.lock);
 }
@@ -370,19 +372,49 @@ scheduler(void)
     for(int qlcnt = 0; qlcnt < NQUEUE; qlcnt++) {
       struct mlfQueue currentQueue = ptable.queue[qlcnt];
 
-      // if there's no RUNNABLE process in current level of queue, then continue.
-      if(currentQueue.processCnt == 0) continue; 
+      // Loop while there is RUNNABLE process in current queue
+      //TODO: do not use cnt variable, use function that returns number of process in a particular level of queue
+      while(currentQueue.processCnt > 0) {
+        struct proc* targetProc = 0;
 
-      // if there's RUNNABLE process in current level of queue
-      if(currentQueue.queueFront != 0 && currentQueue.queueFront->state == RUNNABLE) {
-        c->proc = currentQueue.queueFront;
-        switchuvm(currentQueue.queueFront);
-        currentQueue.queueFront->state = RUNNING;
+        // check for front of current queue
+        if(currentQueue.queueFront != 0 && currentQueue.queueFront->state == RUNNABLE) {
+          //TODO: check for time quantum!!
+          if(currentQueue.queueFront->execTime < TIME_QUANTUM(currentQueue.queueFront->qLevel)) {
+            // execution time is ok yet, set target process with front of current queue
+            targetProc = currentQueue.queueFront;
+          } else {
+            // too much execution time, move to lower queue
+          }
+        }
+
+        // front of current queue is empty or not RUNNABLE
+        //TODO: dequeue
+        else {
+          for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+            if(p->qLevel != qlcnt || p->state != RUNNABLE) continue;
+
+            if(targetProc == 0) targetProc = p;
+            else if(qlcnt == LOW && 
+              targetProc->priority < p->priority) targetProc = p; // for L2, priority scheduling
+          }
+        }
+
+        //TODO: if there is no proper process to schedule in the queue, go out of the while loop and move to the next level of queue(why this occurs?)
+        if(targetProc == 0) break;
+
+        // schedule to target process if target process is not empty
+        cprintf("[process log] pid: %d, priority: %d, level of queue: %d", targetProc->pid, targetProc->priority, targetProc->qLevel);
+
+        c->proc = targetProc;        
+        currentQueue.queueFront = targetProc;
+        switchuvm(targetProc);
+        targetProc->state = RUNNING;
         --currentQueue.processCnt; // decrease count of RUNNABLE process because one process start to run
-        
-        swtch(&(c->scheduler), currentQueue.queueFront->context);
+        swtch(&(c->scheduler), targetProc->context);
         switchkvm();
 
+        // running is done
         c->proc = 0;
       }
     } 
