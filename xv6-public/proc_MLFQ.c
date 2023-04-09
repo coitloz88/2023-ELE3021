@@ -11,7 +11,7 @@ struct {
   struct spinlock lock;
   struct proc proc[NPROC];
 
-  struct mlfqQueue queue[NQUEUE]; // 각 level의 queue에서 가지고 있는 RUNNABLE한 process의 개수
+  struct mlfQueue queue[NQUEUE]; // 각 level의 queue에서 가지고 있는 RUNNABLE한 process의 개수
 } ptable;
 
 static struct proc *initproc;
@@ -25,6 +25,11 @@ static void wakeup1(void *chan);
 void
 pinit(void)
 {
+  for(int i = 0; i < NQUEUE; i++) {
+    ptable.queue[i].queueFront = 0;
+    ptable.queue[i].processCnt = 0;
+  }
+
   initlock(&ptable.lock, "ptable");
 }
 
@@ -82,7 +87,7 @@ allocproc(void)
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
-      goto found;
+      goto found; // if unused process is found newly, init the found process
 
   release(&ptable.lock);
   return 0;
@@ -90,6 +95,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->qLevel= TOP;
+  p->priority = 0;
+  p->execTime = 0;
 
   release(&ptable.lock);
 
@@ -150,7 +158,8 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
-  p->state = RUNNABLE;
+  p->state = RUNNABLE; // all init ready, turn the state of process to RUNNABLE
+  ++ptable.queue[p->qLevel].processCnt;
 
   release(&ptable.lock);
 }
@@ -174,6 +183,25 @@ growproc(int n)
   curproc->sz = sz;
   switchuvm(curproc);
   return 0;
+}
+
+void
+resetproc(struct proc* p) {
+  acquire(&ptable.lock);
+
+  if(ptable.queue[p->qLevel].queueFront == p) {
+    ptable.queue[p->qLevel].queueFront = 0;
+  }
+
+  if(p->state == RUNNABLE) {
+    --ptable.queue[p->qLevel].processCnt;
+    ++ptable.queue[TOP].processCnt;
+  }
+
+  p->execTime = 0;
+  p->qLevel = TOP;
+
+  release(&ptable.lock);
 }
 
 // Create a new process copying p as the parent.
@@ -217,6 +245,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  ++ptable.queue[np->qLevel].processCnt;
 
   release(&ptable.lock);
 
@@ -328,30 +357,36 @@ scheduler(void)
   struct cpu *c = mycpu();
   c->proc = 0;
   
+  cprintf("debug: enter scheduler(), p: %d", p->pid);
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+    // Loop over NQUEUE-level queues
+    for(int qlcnt = 0; qlcnt < NQUEUE; qlcnt++) {
+      struct mlfQueue currentQueue = ptable.queue[qlcnt];
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+      // if there's no RUNNABLE process in current level of queue, then continue.
+      if(currentQueue.processCnt == 0) continue; 
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
+      // if there's RUNNABLE process in current level of queue
+      if(currentQueue.queueFront != 0 && currentQueue.queueFront->state == RUNNABLE) {
+        c->proc = currentQueue.queueFront;
+        switchuvm(currentQueue.queueFront);
+        currentQueue.queueFront->state = RUNNING;
+        --currentQueue.processCnt; // decrease count of RUNNABLE process because one process start to run
+        
+        swtch(&(c->scheduler), currentQueue.queueFront->context);
+        switchkvm();
+
+        c->proc = 0;
+      }
+    } 
+
     release(&ptable.lock);
 
   }
@@ -389,6 +424,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  ptable.queue[myproc()->qLevel].processCnt++;
   sched();
   release(&ptable.lock);
 }
@@ -533,4 +569,29 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+getLevel(void)
+{
+  return myproc()->qLevel;
+}
+
+void
+setPriority(int pid, int priority) 
+{
+  if(priority < 0 || priority > MAXPRIORITY) return; // priority can be 0~3 value
+  
+  struct proc* curproc = myproc();
+
+  acquire(&ptable.lock);
+
+  for(struct proc* p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid != pid || curproc->pid != p->parent->pid) continue;
+    p->priority = priority;
+    release(&ptable.lock);
+    return; //early return in for loop
+  }
+
+  release(&ptable.lock);
 }

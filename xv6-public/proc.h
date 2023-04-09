@@ -54,14 +54,14 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   // MLFQ Scheduling-related variables
-  enum queueLevel qlevel;   // Level of MLFQ
+  enum queueLevel qLevel;   // Level of MLFQ
   int priority;     // Priority of each process
-  int usedTime;     // Time passed during execution
+  int execTime;     // Time passed during execution
 };
 
-struct mlfqQueue {
-  proc* queueFront;
-  int processCnt;
+struct mlfQueue {
+  struct proc* queueFront;      // head of the MLFQ
+  int processCnt;               // RUNNABLE process number in queue
 };
 
 // Process memory is laid out contiguously, low addresses first:

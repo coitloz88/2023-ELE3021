@@ -12,3 +12,4 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       1000  // size of file system in blocks
 #define NQUEUE        3 // total number of proc queue level
+#define MAXPRIORITY     3 // maximum priority of process

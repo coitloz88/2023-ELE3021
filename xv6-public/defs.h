@@ -119,7 +119,12 @@ void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
+
+// proc_MLFQ.c
 void            yield(void);
+void            resetproc(struct proc* p);
+int             getLevel(void);
+void            setPriority(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
