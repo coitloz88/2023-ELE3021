@@ -125,6 +125,7 @@ void            yield(void);
 struct proc*    schedulerChooseProcess(int qLevel);
 int             isValidProcess(struct proc* p);
 void            increaseExecTime(struct proc* p);
+void            priorityBoosting(void);
 
 // queue handler in proc.c
 void            qinit(void);

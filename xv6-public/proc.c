@@ -660,3 +660,21 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+void priorityBoosting(void) {
+  acquire(&ptable.lock);
+  
+  for (int qLevel = 1; qLevel < MAXQLEVEL; qLevel++)
+  {
+    struct proc* p = MLFQdequeue(qLevel);
+
+    while(p != 0) {
+      p->execTime = 0;
+      p->priority = MAXPRIORITY - 1;
+      MLFQenqueue(p, 0);
+      p = MLFQdequeue(qLevel);
+    }
+  }
+  
+  release(&ptable.lock);
+}
