@@ -442,15 +442,15 @@ scheduler(void)
       struct proc* targetProc = 0;
 
       //TODO: check for higher level queue has new arrived RUNNABLE process
-      // for(int prev = 0; prev <= qLevel; prev++) {
-        // targetProc = schedulerChooseProcess(prev);
+      for(int prev = 0; prev <= qLevel; prev++) {
+        targetProc = schedulerChooseProcess(prev);
 
-      //   if(isValidProcess(targetProc)) {
-      //     qLevel = prev;
-      //     break;
-      //   }
-      // }
-      targetProc = schedulerChooseProcess(qLevel);
+        if(isValidProcess(targetProc)) {
+          qLevel = prev;
+          break;
+        }
+      }
+      // targetProc = schedulerChooseProcess(qLevel);
 
       if(!isValidProcess(targetProc)
           || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
@@ -470,7 +470,7 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue
+      MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue (끝났다면, 어차피 적절한 process를 고르는 과정에서 deprecate됨)
     }
 
     release(&ptable.lock);
