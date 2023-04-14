@@ -128,8 +128,8 @@ void            increaseExecTime(struct proc* p);
 
 // queue handler in proc.c
 void            qinit(void);
-int             enqueue(struct proc* p, int qLevel);
-struct proc*    dequeue(int qLevel);
+int             MLFQenqueue(struct proc* p, int qLevel);
+struct proc*    MLFQdequeue(int qLevel);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

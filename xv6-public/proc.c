@@ -128,22 +128,24 @@ found:
 }
 
 // enqueue in mlfQueue
-int enqueue(struct proc* p, int qLevel){
-  if(qLevel < 0 || qLevel >= MAXQLEVEL) return -2;  // invalid queue level input
-  else if(qtable.mlfQueue[qLevel].rear > NPROC) return -1;  // queue already has more than max process number(NPROC)
+int MLFQenqueue(struct proc* p, int qLevel){
+	if(qLevel < 0 || qLevel >= MAXQLEVEL) return -2;  // invalid queue level input
+  else if(qtable.mlfQueue[qLevel].rear >= NPROC) return -1;  // queue already has more than max process number(NPROC)
 
   // enqueue logic starts here
   acquire(&qtable.lock);
 
-  qtable.mlfQueue[qLevel].procsQueue[++qtable.mlfQueue[qLevel].rear] = p;
+  qtable.mlfQueue[qLevel].procsQueue[qtable.mlfQueue[qLevel].rear] = p;
+	
+  qtable.mlfQueue[qLevel].rear += 1;
 
   release(&qtable.lock);
   return 0;
 }
 
-struct proc* dequeue(int qLevel){
-  if(qLevel < 0 || qLevel >= MAXQLEVEL) return NULL;  // invalid queue level input, return null
-  else if(qtable.mlfQueue[qLevel].rear == 0) return NULL;  // queue does not have any process, return null
+struct proc* MLFQdequeue(int qLevel){
+  if(qLevel < 0 || qLevel >= MAXQLEVEL) return 0;  // invalid queue level input, return null
+  else if(qtable.mlfQueue[qLevel].rear == 0) return 0;  // queue does not have any process, return null
 
   // dequeue logic starts here
   acquire(&qtable.lock);
@@ -151,10 +153,10 @@ struct proc* dequeue(int qLevel){
   struct proc* p = qtable.mlfQueue[qLevel].procsQueue[0];
   
   // shift queue contents left to prevent overflow
-  for(int i = 0; i < qtable.mlfQueue[qLevel].rear - 1; i++){
+  for(int i = 0; i < qtable.mlfQueue[qLevel].rear; i++){
     qtable.mlfQueue[qLevel].procsQueue[i] = qtable.mlfQueue[qLevel].procsQueue[i + 1];
   }
-  --qtable.mlfQueue[qLevel].rear; // dequeue and shift is over, decrease rear
+  qtable.mlfQueue[qLevel].rear -= 1; // dequeue and shift is over, decrease rear
 
   release(&qtable.lock);
 
@@ -163,7 +165,7 @@ struct proc* dequeue(int qLevel){
 
 void increaseExecTime(struct proc* p) {
   acquire(&ptable.lock);
-  ++p->execTime;
+  p->execTime += 1;
   release(&ptable.lock);
 }
 
@@ -201,7 +203,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
-  enqueue(p, TOP);
+  MLFQenqueue(p, TOP);
 
   release(&ptable.lock);
 }
@@ -268,7 +270,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  enqueue(np, TOP);
+  MLFQenqueue(np, TOP);
 
   release(&ptable.lock);
 
@@ -366,9 +368,10 @@ wait(void)
 }
 
 struct proc* schedulerChooseProcess(int qLevel) {
-  struct proc* targetProc = dequeue(qLevel);
+  struct proc* targetProc = MLFQdequeue(qLevel);
+  //TODO: dequeue by priority when qLevel is BOTTOM
 
-  while(targetProc != NULL){
+  while(targetProc != 0){
     if(targetProc->state != RUNNABLE || targetProc->killed == 1) {
       // deprecated process(state is not RUNNABLE or killed process) is kicked out of the queue
 
@@ -379,7 +382,7 @@ struct proc* schedulerChooseProcess(int qLevel) {
       //TODO: enqueue initialized proc?
       // No, 만약 enqueue하게 되면 RUNNABLE 하지 않은 프로세스들로 ptable이 가득 찬 경우 무한 루프를 돌게됨
       // RUNNABLE 하지 않거나 killed된 process들은 재실행시 다시 enqueue 하도록...
-      targetProc = dequeue(qLevel);
+      targetProc = MLFQdequeue(qLevel);
       continue;
     }
 
@@ -388,13 +391,13 @@ struct proc* schedulerChooseProcess(int qLevel) {
       if(qLevel < BOTTOM) {
         // qLevel = TOP, qLevel = MIDDLE
         targetProc->execTime = 0;
-        enqueue(targetProc, qLevel + 1);
+        MLFQenqueue(targetProc, qLevel + 1);
       } else {
         targetProc->execTime = 0;
-        ++targetProc->priority;
-        enqueue(targetProc, qLevel);
+        if(targetProc->priority > 0) targetProc->priority -= 1;
+        MLFQenqueue(targetProc, qLevel);
       }
-      targetProc = dequeue(qLevel);
+      targetProc = MLFQdequeue(qLevel);
       continue;
     }
 
@@ -408,7 +411,10 @@ struct proc* schedulerChooseProcess(int qLevel) {
 }
 
 int isValidProcess(struct proc* p) {
-  int isValid = p != NULL && p->state == RUNNABLE;
+  if(p != 0 && p->state == RUNNABLE){
+  	return 1;
+  };
+  return 0;
 }
 
 //PAGEBREAK: 42
@@ -433,21 +439,24 @@ scheduler(void)
     acquire(&ptable.lock);
 
     for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
-      struct proc* targetProc = NULL;
+      struct proc* targetProc = 0;
 
       //TODO: check for higher level queue has new arrived RUNNABLE process
-      for(int prev = 0; prev <= qLevel; prev++) {
-        targetProc = schedulerChooseProcess(prev);
+      // for(int prev = 0; prev <= qLevel; prev++) {
+        // targetProc = schedulerChooseProcess(prev);
 
-        if(isValidProcess(targetProc)) {
-          qLevel = prev;
-          break;
-        }
-      }
+      //   if(isValidProcess(targetProc)) {
+      //     qLevel = prev;
+      //     break;
+      //   }
+      // }
+      targetProc = schedulerChooseProcess(qLevel);
 
       if(!isValidProcess(targetProc)
           || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
       
+      cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
+
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -461,7 +470,7 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      enqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue
+      MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue
     }
 
     release(&ptable.lock);
