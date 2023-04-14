@@ -161,6 +161,12 @@ struct proc* dequeue(int qLevel){
   return p;
 }
 
+void increaseExecTime(struct proc* p) {
+  acquire(&ptable.lock);
+  ++p->execTime;
+  release(&ptable.lock);
+}
+
 //PAGEBREAK: 32
 // Set up first user process.
 void
@@ -359,6 +365,52 @@ wait(void)
   }
 }
 
+struct proc* schedulerChooseProcess(int qLevel) {
+  struct proc* targetProc = dequeue(qLevel);
+
+  while(targetProc != NULL){
+    if(targetProc->state != RUNNABLE || targetProc->killed == 1) {
+      // deprecated process(state is not RUNNABLE or killed process) is kicked out of the queue
+
+      // before kick out, init some process variables related to queue
+      targetProc->execTime = 0;
+      targetProc->priority = MAXPRIORITY - 1;
+
+      //TODO: enqueue initialized proc?
+      // No, 만약 enqueue하게 되면 RUNNABLE 하지 않은 프로세스들로 ptable이 가득 찬 경우 무한 루프를 돌게됨
+      // RUNNABLE 하지 않거나 killed된 process들은 재실행시 다시 enqueue 하도록...
+      targetProc = dequeue(qLevel);
+      continue;
+    }
+
+    // only RUNNABLE process arrives in this conditional statement
+    if(targetProc->execTime >= TIME_QUANTUM(qLevel)) {
+      if(qLevel < BOTTOM) {
+        // qLevel = TOP, qLevel = MIDDLE
+        targetProc->execTime = 0;
+        enqueue(targetProc, qLevel + 1);
+      } else {
+        targetProc->execTime = 0;
+        ++targetProc->priority;
+        enqueue(targetProc, qLevel);
+      }
+      targetProc = dequeue(qLevel);
+      continue;
+    }
+
+    // valid process arrives in the end of loop
+    // not NULL, RUNNABLE, execTime is valid
+    break;
+  }
+
+  // NULL(means no process in current level of queue) or valid process is returned
+  return targetProc;
+}
+
+int isValidProcess(struct proc* p) {
+  int isValid = p != NULL && p->state == RUNNABLE;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -370,7 +422,6 @@ wait(void)
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
   
@@ -380,24 +431,39 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
 
+    for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
+      struct proc* targetProc = NULL;
+
+      //TODO: check for higher level queue has new arrived RUNNABLE process
+      for(int prev = 0; prev <= qLevel; prev++) {
+        targetProc = schedulerChooseProcess(prev);
+
+        if(isValidProcess(targetProc)) {
+          qLevel = prev;
+          break;
+        }
+      }
+
+      if(!isValidProcess(targetProc)
+          || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
+      
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      c->proc = targetProc;
+      switchuvm(targetProc);
+      targetProc->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
+      swtch(&(c->scheduler), targetProc->context);
       switchkvm();
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
+      enqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue
     }
+
     release(&ptable.lock);
 
   }
@@ -508,8 +574,10 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      //TODO: init process & enqueue waked up process
+    }
 }
 
 // Wake up all processes sleeping on chan.

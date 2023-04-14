@@ -121,6 +121,11 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 
+// mlfq scheduler in proc.c
+struct proc*    schedulerChooseProcess(int qLevel);
+int             isValidProcess(struct proc* p);
+void            increaseExecTime(struct proc* p);
+
 // queue handler in proc.c
 void            qinit(void);
 int             enqueue(struct proc* p, int qLevel);
