@@ -121,6 +121,11 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 
+// queue handler in proc.c
+void            qinit(void);
+int             enqueue(struct proc* p, int qLevel);
+struct proc*    dequeue(int qLevel);
+
 // swtch.S
 void            swtch(struct context**, struct context*);
 

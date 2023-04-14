@@ -33,6 +33,9 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum queueLevel { TOP = 0, MIDDLE, BOTTOM };
+
+#define TIME_QUANTUM(LEVEL) (2 * LEVEL) + 4
 
 // Per-process state
 struct proc {
@@ -49,6 +52,10 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // member variables for mlfq
+  int priority;                // priority of process
+  int execTime;                // time passed after execution
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -56,3 +63,14 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+struct mlfQueue {
+  // RUNNABLE한 프로세스만 저장하는 큐
+
+  // dequeue가 될 때는, 전체 queueProc array를 앞으로 한칸씩 땡겨주는 식으로 구현
+  // enqueue는 단순히 rear가 NPROC보다 큰지 확인하여, rear를 앞으로 한칸 땡겨줌
+
+  //TODO: process가 kill될 때, queue에서도 해당 queue를 삭제
+  int rear;
+  struct proc* procsQueue[NPROC];
+};

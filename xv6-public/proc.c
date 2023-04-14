@@ -12,6 +12,11 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+struct {
+  struct spinlock lock;
+  struct mlfQueue mlfQueue[MAXQLEVEL];
+} qtable;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -24,6 +29,11 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+}
+
+// init_queue function and call it in main() function to ensure queue is initialized before it is used in scheduler()
+void qinit(void){
+  initlock(&qtable.lock, "qtable");
 }
 
 // Must be called with interrupts disabled
@@ -88,6 +98,8 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->priority = MAXPRIORITY - 1;
+  p->execTime = 0;
 
   release(&ptable.lock);
 
@@ -111,6 +123,40 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+
+  return p;
+}
+
+// enqueue in mlfQueue
+int enqueue(struct proc* p, int qLevel){
+  if(qLevel < 0 || qLevel >= MAXQLEVEL) return -2;  // invalid queue level input
+  else if(qtable.mlfQueue[qLevel].rear > NPROC) return -1;  // queue already has more than max process number(NPROC)
+
+  // enqueue logic starts here
+  acquire(&qtable.lock);
+
+  qtable.mlfQueue[qLevel].procsQueue[++qtable.mlfQueue[qLevel].rear] = p;
+
+  release(&qtable.lock);
+  return 0;
+}
+
+struct proc* dequeue(int qLevel){
+  if(qLevel < 0 || qLevel >= MAXQLEVEL) return NULL;  // invalid queue level input, return null
+  else if(qtable.mlfQueue[qLevel].rear == 0) return NULL;  // queue does not have any process, return null
+
+  // dequeue logic starts here
+  acquire(&qtable.lock);
+
+  struct proc* p = qtable.mlfQueue[qLevel].procsQueue[0];
+  
+  // shift queue contents left to prevent overflow
+  for(int i = 0; i < qtable.mlfQueue[qLevel].rear - 1; i++){
+    qtable.mlfQueue[qLevel].procsQueue[i] = qtable.mlfQueue[qLevel].procsQueue[i + 1];
+  }
+  --qtable.mlfQueue[qLevel].rear; // dequeue and shift is over, decrease rear
+
+  release(&qtable.lock);
 
   return p;
 }
@@ -149,6 +195,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  enqueue(p, TOP);
 
   release(&ptable.lock);
 }
@@ -215,6 +262,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  enqueue(np, TOP);
 
   release(&ptable.lock);
 
@@ -386,7 +434,7 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  myproc()->state = RUNNABLE; // 실행되던 프로세스를 다시 RUNNING에서 RUNNABLE로 바꿔줌
   sched();
   release(&ptable.lock);
 }
@@ -486,6 +534,8 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
+      p->execTime = 0;
+      p->priority = MAXPRIORITY - 1;
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
       release(&ptable.lock);
@@ -493,6 +543,7 @@ kill(int pid)
     }
   }
   release(&ptable.lock);
+
   return -1;
 }
 
