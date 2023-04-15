@@ -135,6 +135,7 @@ void            schedulerUnlock(int password);
 void            qinit(void);
 int             MLFQenqueue(struct proc* p, int qLevel);
 int             MLFQfrontEnqueue(struct proc* p, int qLevel);
+int             MLFQdeleteByPid(int pid);
 struct proc*    MLFQdequeue(int qLevel);
 
 // swtch.S

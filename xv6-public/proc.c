@@ -169,6 +169,44 @@ int MLFQfrontEnqueue(struct proc* p, int qLevel){
   return 0;
 }
 
+int MLFQdeleteByPid(int pid) {
+  struct proc* p = 0;
+
+  // find process in mlfq table
+  int foundQLevel = -1;
+  int foundQIndex = -1;
+  int foundQRear = -1;
+
+  for(int qLevel; qLevel < MAXQLEVEL; qLevel++) {
+    int qEntriesCnt = qtable.mlfQueue[qLevel].rear;
+    for(int qIndex = 0; qIndex < qEntriesCnt; qIndex++) {
+      if(pid == qtable.mlfQueue[qLevel].procsQueue[qIndex]) {
+        p = qtable.mlfQueue[qLevel].procsQueue[qIndex];
+        foundQLevel = qLevel;
+        foundQIndex = qIndex;
+        foundQRear = qEntriesCnt;
+        break;
+      }
+    }
+    if(p != 0) break;
+  }
+
+  if(p == 0 || foundQLevel + foundQIndex + foundQRear < -1) return -1; // process does not exist in queue table
+
+  acquire(&qtable.lock);
+  
+  // delete process from mlfq table
+  for(int qIter = foundQIndex; qIter < foundQRear - 1; qIter++) {
+      qtable.mlfQueue[foundQLevel].procsQueue[qIter] = qtable.mlfQueue[foundQLevel].procsQueue[qIter + 1];
+  }
+
+  qtable.mlfQueue[foundQLevel].rear -= 1;
+
+  release(&qtable.lock);
+
+  return 0;
+}
+
 struct proc* MLFQdequeue(int qLevel){
   if(qLevel < 0 || qLevel >= MAXQLEVEL) return 0;  // invalid queue level input, return null
   else if(qtable.mlfQueue[qLevel].rear == 0) return 0;  // queue does not have any process, return null
@@ -187,7 +225,8 @@ struct proc* MLFQdequeue(int qLevel){
       qtable.mlfQueue[qLevel].procsQueue[i] = qtable.mlfQueue[qLevel].procsQueue[i + 1];
     }
     qtable.mlfQueue[qLevel].rear -= 1; // dequeue and shift is over, decrease rear
-
+    //TODO: 가장 마지막 process는 하드 코딩으로 초기화해줘야함.. 근데 어차피 rear가 감소하니까 상관없는거 아닐까? (접근 불가한 곳에 있는 쓰레기 데이터)
+    
     release(&qtable.lock);
   } else {
     // qLevel = BOTTOM, priority scheduling
