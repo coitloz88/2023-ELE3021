@@ -135,8 +135,8 @@ int MLFQenqueue(struct proc* p, int qLevel){
   // enqueue logic starts here
   acquire(&qtable.lock);
 
+  p->qLevel = qLevel;
   qtable.mlfQueue[qLevel].procsQueue[qtable.mlfQueue[qLevel].rear] = p;
-	
   qtable.mlfQueue[qLevel].rear += 1;
 
   release(&qtable.lock);
@@ -455,7 +455,7 @@ scheduler(void)
       if(!isValidProcess(targetProc)
           || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
       
-      cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
+      // cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -661,6 +661,49 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int getlev(void) {
+  // int targetPId = myproc()->pid;
+  // int foundLevel = -1; // found level = -1 means queue level not found
+
+  // // getlev가 안되는 이유: myproc, 즉 RUNNING 중인 process는 dequeue된 상태이기 때문.
+
+  // cprintf("targetPid: %d\n", targetPId);
+
+  // for(int qLevel = 0; qLevel < MAXQLEVEL && foundLevel == -1; qLevel++){
+  //   for(int i = 0; i < qtable.mlfQueue[qLevel].rear; i++) {
+  //     cprintf("founding pid: %d\n", qtable.mlfQueue[qLevel].procsQueue[i]->pid);
+  //     if(qtable.mlfQueue[qLevel].procsQueue[i]->pid == targetPId){
+  //       foundLevel = qLevel;
+	// 	    cprintf("qLevel: %d\n", foundLevel);
+  //       break;
+  //     };
+  //   }
+  // }
+
+  return myproc()->qLevel;
+  
+  // return foundLevel;
+}
+
+void setpriority(int pid, int priority) {
+  if(priority < 0 || priority > MAXPRIORITY) return; // priority can be 0~3 value
+
+  acquire(&ptable.lock);
+
+  int found = 0;
+  for(int qLevel = 0; qLevel < MAXQLEVEL && !found; qLevel++){
+    for(int i = 0; i < qtable.mlfQueue[qLevel].rear; i++) {
+      if(qtable.mlfQueue[qLevel].procsQueue[i]->pid == pid){
+        qtable.mlfQueue[qLevel].procsQueue[i]->priority = priority;
+        found = 1;
+        break;
+      };
+    }
+  }
+
+  release(&ptable.lock);
 }
 
 void priorityBoosting(void) {

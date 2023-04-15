@@ -24,6 +24,12 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 
+// system calls for MLFQ scheduling
+void yield(void);
+int getlev(void);
+void setpriority(int pid, int priority);
+
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);

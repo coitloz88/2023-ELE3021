@@ -56,6 +56,7 @@ struct proc {
   // member variables for mlfq
   int priority;                // priority of process
   int execTime;                // time passed after execution
+  enum queueLevel qLevel;      // queue level
 };
 
 // Process memory is laid out contiguously, low addresses first:

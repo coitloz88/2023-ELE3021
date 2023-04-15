@@ -89,3 +89,29 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// wrapper functions for system calls which are needed for MLFQ scheduling
+int
+sys_yield(void)
+{
+  myproc()->priority = MAXPRIORITY - 1;
+  myproc()->execTime = 0;
+  yield();
+  return 0;
+}
+
+int sys_getlev(void)
+{
+  return getlev();
+}
+
+int sys_setpriority(int pid, int priority)
+{
+  //TODO: manage priority out of range problem in wrapper function
+  // int pid, priority;
+
+  // if(argint(0, &pid) < 0 || argint(1, &priority)) return -1;
+
+  setpriority(pid, priority);
+  return 0;
+}
