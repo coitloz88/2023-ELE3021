@@ -692,11 +692,11 @@ procdump(void)
   }
 }
 
-int getlev(void) {
+int getLevel(void) {
   // int targetPId = myproc()->pid;
   // int foundLevel = -1; // found level = -1 means queue level not found
 
-  // // getlev가 안되는 이유: myproc, 즉 RUNNING 중인 process는 dequeue된 상태이기 때문.
+  // // getLevel가 안되는 이유: myproc, 즉 RUNNING 중인 process는 dequeue된 상태이기 때문.
 
   // cprintf("targetPid: %d\n", targetPId);
 
@@ -716,7 +716,7 @@ int getlev(void) {
   // return foundLevel;
 }
 
-void setpriority(int pid, int priority) {
+void setPriority(int pid, int priority) {
   if(priority < 0 || priority > MAXPRIORITY) return; // priority can be 0~3 value
 
   acquire(&ptable.lock);

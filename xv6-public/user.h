@@ -27,8 +27,8 @@ int myfunction(char*);
 
 // system calls for MLFQ scheduling
 void yield(void);
-int getlev(void);
-void setpriority(int pid, int priority);
+int getLevel(void);
+void setPriority(int pid, int priority);
 
 
 // ulib.c

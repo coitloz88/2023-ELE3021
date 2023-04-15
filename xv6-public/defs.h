@@ -126,8 +126,8 @@ struct proc*    schedulerChooseProcess(int qLevel);
 int             isValidProcess(struct proc* p);
 void            increaseExecTime(struct proc* p);
 void            priorityBoosting(void);
-int             getlev(void);
-void            setpriority(int pid, int priority);
+int             getLevel(void);
+void            setPriority(int pid, int priority);
 
 // queue handler in proc.c
 void            qinit(void);

@@ -100,18 +100,18 @@ sys_yield(void)
   return 0;
 }
 
-int sys_getlev(void)
+int sys_getLevel(void)
 {
-  return getlev();
+  return getLevel();
 }
 
-int sys_setpriority(int pid, int priority)
+int sys_setPriority(int pid, int priority)
 {
   //TODO: manage priority out of range problem in wrapper function
   // int pid, priority;
 
   // if(argint(0, &pid) < 0 || argint(1, &priority)) return -1;
 
-  setpriority(pid, priority);
+  setPriority(pid, priority);
   return 0;
 }
