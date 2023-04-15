@@ -148,17 +148,46 @@ struct proc* MLFQdequeue(int qLevel){
   else if(qtable.mlfQueue[qLevel].rear == 0) return 0;  // queue does not have any process, return null
 
   // dequeue logic starts here
-  acquire(&qtable.lock);
 
-  struct proc* p = qtable.mlfQueue[qLevel].procsQueue[0];
+  struct proc* p = 0;
   
-  // shift queue contents left to prevent overflow
-  for(int i = 0; i < qtable.mlfQueue[qLevel].rear; i++){
-    qtable.mlfQueue[qLevel].procsQueue[i] = qtable.mlfQueue[qLevel].procsQueue[i + 1];
-  }
-  qtable.mlfQueue[qLevel].rear -= 1; // dequeue and shift is over, decrease rear
+  if(qLevel < MAXQLEVEL - 1) {
+    acquire(&qtable.lock);
+    
+    p = qtable.mlfQueue[qLevel].procsQueue[0];
+    
+    // shift queue contents left to prevent overflow
+    for(int i = 0; i < qtable.mlfQueue[qLevel].rear - 1; i++){
+      qtable.mlfQueue[qLevel].procsQueue[i] = qtable.mlfQueue[qLevel].procsQueue[i + 1];
+    }
+    qtable.mlfQueue[qLevel].rear -= 1; // dequeue and shift is over, decrease rear
 
-  release(&qtable.lock);
+    release(&qtable.lock);
+  } else {
+    // qLevel = BOTTOM, priority scheduling
+    acquire(&qtable.lock);
+
+    int dequeueIndex = -1;
+    for(int iterPrior = 0 ; iterPrior < MAXPRIORITY && dequeueIndex == -1; iterPrior++) {
+      for(int i = 0; i < qtable.mlfQueue[BOTTOM].rear; i++){
+        if(qtable.mlfQueue[BOTTOM].procsQueue[i]->priority == iterPrior) {
+          dequeueIndex = i;
+          break;
+        };
+      }
+    }
+
+    p = qtable.mlfQueue[BOTTOM].procsQueue[dequeueIndex];
+
+    // shift queue contents left to prevent overflow
+    for(int i = dequeueIndex; i < qtable.mlfQueue[BOTTOM].rear - 1; i++){
+      qtable.mlfQueue[BOTTOM].procsQueue[i] = qtable.mlfQueue[BOTTOM].procsQueue[i + 1];
+    }
+    qtable.mlfQueue[BOTTOM].rear -= 1;
+
+    release(&qtable.lock);
+  }
+
 
   return p;
 }
