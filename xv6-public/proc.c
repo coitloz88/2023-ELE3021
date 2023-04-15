@@ -14,6 +14,11 @@ struct {
 
 struct {
   struct spinlock lock;
+  struct proc* proc;
+} ltable;
+
+struct {
+  struct spinlock lock;
   struct mlfQueue mlfQueue[MAXQLEVEL];
 } qtable;
 
@@ -29,6 +34,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  initlock(&ltable.lock, "ltable");
 }
 
 // init_queue function and call it in main() function to ensure queue is initialized before it is used in scheduler()
@@ -137,6 +143,26 @@ int MLFQenqueue(struct proc* p, int qLevel){
 
   p->qLevel = qLevel;
   qtable.mlfQueue[qLevel].procsQueue[qtable.mlfQueue[qLevel].rear] = p;
+  qtable.mlfQueue[qLevel].rear += 1;
+
+  release(&qtable.lock);
+  return 0;
+}
+
+int MLFQfrontEnqueue(struct proc* p, int qLevel){
+	if(qLevel < 0 || qLevel >= MAXQLEVEL) return -2;  // invalid queue level input
+  else if(qtable.mlfQueue[qLevel].rear >= NPROC) return -1;  // queue already has more than max process number(NPROC)
+
+  // enqueue logic starts here
+  acquire(&qtable.lock);
+
+  for(int i = qtable.mlfQueue[qLevel].rear - 1; i > 0; i--){
+    qtable.mlfQueue[qLevel].procsQueue[i + 1] = qtable.mlfQueue[qLevel].procsQueue[i];
+  }
+
+  p->qLevel = qLevel;
+
+  qtable.mlfQueue[qLevel].procsQueue[0] = p;
   qtable.mlfQueue[qLevel].rear += 1;
 
   release(&qtable.lock);
@@ -754,11 +780,54 @@ void priorityBoosting(void) {
 }
 
 void schedulerLock(int password){
-  if(password != SLPASSWORD) return;
-  //TODO: enqueue in front of the mlfq
+  // kill process and return if password is wrong
+  struct proc* curproc = myproc();
+
+  if(password != SLPASSWORD) {
+    cprintf("[scheduler lock] Wrong Password!\n");
+    cprintf("pid: %d, time quantum: %d, level of queue: %d\n\n", curproc->pid, curproc->execTime, curproc->qLevel);
+    kill(curproc->pid);
+    return;
+  };
+
+  // 기존에 존재하던 프로세스가 아니라면, schedulerLock을 호출할 수 없다.
+  int pid = curproc->pid;
+  for(struct proc* p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(pid == p->pid) {
+      pid = -1;
+      break;
+    }
+  }
+  if(pid >= 0) return; 
+  
+  //TODO: 이미 lock이 걸린 process가 있으면 ?
+  if(ltable.proc != 0) return;
+
+  //TODO: update global tick: 추후 trap.c에서 lock을 호출한 proc의 pid와, myproc()의 pid가 같으면 lock에 성공한 것으로 판별하고 global tick을 초기화
+  
+  acquire(&ltable.lock);
+  ltable.proc = curproc;
+  release(&ltable.lock);
 }
 
 void schedulerUnLock(int password){  
-  if(password != SLPASSWORD) return;
+  if(password != SLPASSWORD) {
+    struct proc* p = myproc();
+    cprintf("[scheduler unlock] Wrong Password!\n");
+    cprintf("pid: %d, time quantum: %d, level of queue: %d\n\n", p->pid, p->execTime, p->qLevel);
+    kill(p->pid);
+    return;
+  };
+
+  //TODO: lock되어있는 프로세스가 실행되는 동안은 다른 프로세스는 동작 못하고 있는 건가? 그럼 unlock함수는 무조건 lock된 프로세스(본인)가 호출하는건가??
   //TODO: kill process and enqueue in the rear of queue(use original funtion)
+  struct proc* lockproc = ltable.proc;
+
+  acquire(&ltable.lock);
+  ltable.proc = 0;
+  release(&ltable.lock);
+
+  lockproc->execTime = 0;
+  lockproc->priority = MAXPRIORITY - 1;
+  MLFQfrontEnqueue(lockproc, TOP);  
 }

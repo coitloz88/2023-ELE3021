@@ -134,6 +134,7 @@ void            schedulerUnlock(int password);
 // queue handler in proc.c
 void            qinit(void);
 int             MLFQenqueue(struct proc* p, int qLevel);
+int             MLFQfrontEnqueue(struct proc* p, int qLevel);
 struct proc*    MLFQdequeue(int qLevel);
 
 // swtch.S

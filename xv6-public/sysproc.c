@@ -116,7 +116,13 @@ int sys_setPriority(void)
 
 int sys_schedulerLock(void){
   int password = 0;
-  if(argint(0, &password) != SLPASSWORD) return -1;
+  if(argint(0, &password) != SLPASSWORD) {
+    struct proc* p = myproc();
+    cprintf("[scheduler lock] Wrong Password\n");
+    cprintf("pid: %d, time quantum: %d, level of queue: %d\n\n", p->pid, p->execTime, p->qLevel);
+    kill(p->pid);
+    return -1;
+  };
 
   schedulerLock(password);
   return 0;
@@ -124,7 +130,14 @@ int sys_schedulerLock(void){
 
 int sys_schedulerLock(void){
   int password = 0;
-  if(argint(0, &password) != SLPASSWORD) return -1;
+  if(argint(0, &password) != SLPASSWORD) {
+    struct proc* p = myproc();
+    cprintf("[scheduler lock] Wrong Password\n");
+    cprintf("pid: %d, time quantum: %d, level of queue: %d\n\n", p->pid, p->execTime, p->qLevel);
+    kill(p->pid);
+    return -1;
+  };
 
   schedulerUnLock(password);
+  return 0;
 }
