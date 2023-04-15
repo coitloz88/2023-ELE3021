@@ -752,3 +752,13 @@ void priorityBoosting(void) {
   
   release(&ptable.lock);
 }
+
+void schedulerLock(int password){
+  if(password != SLPASSWORD) return;
+  //TODO: enqueue in front of the mlfq
+}
+
+void schedulerUnLock(int password){  
+  if(password != SLPASSWORD) return;
+  //TODO: kill process and enqueue in the rear of queue(use original funtion)
+}

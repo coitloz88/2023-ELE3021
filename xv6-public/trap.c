@@ -84,7 +84,12 @@ trap(struct trapframe *tf)
     cprintf("user interrupt %d called!\n", tf->trapno);
     myproc()->killed = 1;
     break;
-
+  case T_SCHEDULER_LOCK:
+    cprintf("scheduler lock called!\n");
+    break;
+  case T_SCHEDULER_UNLOCK:
+    cprintf("scheduler unlock called!\n");
+    break;
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){

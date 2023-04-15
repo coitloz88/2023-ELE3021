@@ -29,7 +29,8 @@ int myfunction(char*);
 void yield(void);
 int getLevel(void);
 void setPriority(int pid, int priority);
-
+void schedulerLock(int password);
+void schedulerUnlock(int password);
 
 // ulib.c
 int stat(const char*, struct stat*);

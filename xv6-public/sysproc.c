@@ -105,13 +105,26 @@ int sys_getLevel(void)
   return getLevel();
 }
 
-int sys_setPriority(int pid, int priority)
-{
-  //TODO: manage priority out of range problem in wrapper function
-  // int pid, priority;
-
-  // if(argint(0, &pid) < 0 || argint(1, &priority)) return -1;
+int sys_setPriority(void)
+{ 
+  int pid = 0, priority = 0;
+  if(argint(0, &pid) < 0 || argint(1, &priority) > MAXPRIORITY) return -1;
 
   setPriority(pid, priority);
   return 0;
+}
+
+int sys_schedulerLock(void){
+  int password = 0;
+  if(argint(0, &password) != SLPASSWORD) return -1;
+
+  schedulerLock(password);
+  return 0;
+}
+
+int sys_schedulerLock(void){
+  int password = 0;
+  if(argint(0, &password) != SLPASSWORD) return -1;
+
+  schedulerUnLock(password);
 }

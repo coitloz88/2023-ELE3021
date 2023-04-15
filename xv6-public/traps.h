@@ -38,3 +38,7 @@
 
 // lab04: add trap for int 128
 #define T_INT128      128
+
+// scheduler interrupt system call
+#define T_SCHEDULER_LOCK    129
+#define T_SCHEDULER_UNLOCK  130

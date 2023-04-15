@@ -13,3 +13,4 @@
 #define FSSIZE       1000  // size of file system in blocks
 #define MAXQLEVEL    3  // max level of multi level queue
 #define MAXPRIORITY  4  // max priority of process
+#define SLPASSWORD     2020028586
