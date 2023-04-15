@@ -23,6 +23,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int myfunction(char*);
 
 // system calls for MLFQ scheduling
 void yield(void);
