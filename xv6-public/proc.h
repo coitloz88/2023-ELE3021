@@ -34,6 +34,7 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 enum queueLevel { TOP = 0, MIDDLE, BOTTOM };
+enum locked { UNLOCKED = 0, LOCKED };
 
 #define TIME_QUANTUM(LEVEL) (2 * LEVEL) + 4
 
@@ -55,8 +56,12 @@ struct proc {
 
   // member variables for mlfq
   int priority;                // priority of process
+  uint arrivedTime;
   int execTime;                // time passed after execution
   enum queueLevel qLevel;      // queue level
+
+  // locked
+  enum locked isLock;
 };
 
 // Process memory is laid out contiguously, low addresses first:

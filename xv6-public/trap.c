@@ -25,6 +25,9 @@ tvinit(void) // trap vectors init
   SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL ], DPL_USER);
                                                 // only int T_SYSCALL can be called from user-level
   SETGATE(idt[T_INT128], 1, SEG_KCODE<<3, vectors[T_INT128], DPL_USER);
+  SETGATE(idt[T_SCHEDULER_LOCK], 1, SEG_KCODE<<3, vectors[T_SCHEDULER_LOCK], DPL_USER);
+  SETGATE(idt[T_SCHEDULER_UNLOCK], 1, SEG_KCODE<<3, vectors[T_SCHEDULER_UNLOCK], DPL_USER);
+
   initlock(&tickslock, "time");
 }
 
@@ -56,6 +59,7 @@ trap(struct trapframe *tf)
       wakeup(&ticks);
       release(&tickslock);
       if(ticks % 100 == 0) priorityBoosting();
+      //TODO: schedulerUnlock
     }
     lapiceoi();
     break;
@@ -86,9 +90,11 @@ trap(struct trapframe *tf)
     break;
   case T_SCHEDULER_LOCK:
     cprintf("scheduler lock called!\n");
+    schedulerLock(SLPASSWORD);
     break;
   case T_SCHEDULER_UNLOCK:
     cprintf("scheduler unlock called!\n");
+    schedulerUnlock(SLPASSWORD);
     break;
   //PAGEBREAK: 13
   default:

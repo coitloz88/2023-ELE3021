@@ -104,8 +104,10 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->arrivedTime = ticks;
   p->priority = MAXPRIORITY - 1;
   p->execTime = 0;
+  p->isLock = UNLOCKED;
 
   release(&ptable.lock);
 
@@ -132,6 +134,12 @@ found:
 
   return p;
 }
+
+void printProcess(const char* funcName, struct proc* targetProc) {
+  if(targetProc == 0) cprintf("\n[%s log] process is NULL!\n");
+  else cprintf("\n[%s log] pid: %d, qLevel: %d, state: %d, arrivedTime: %d, execTime: %d, priority: %d\n", funcName, targetProc->pid, targetProc->qLevel, targetProc->state, targetProc->arrivedTime, targetProc->execTime, targetProc->priority);
+}
+
 
 // enqueue in mlfQueue
 int MLFQenqueue(struct proc* p, int qLevel){
@@ -169,6 +177,46 @@ int MLFQfrontEnqueue(struct proc* p, int qLevel){
   return 0;
 }
 
+int MLFQdeleteByPid(int pid) {
+  struct proc* p = 0;
+
+  // find process in mlfq table
+  int foundQLevel = -1;
+  int foundQIndex = -1;
+  int foundQRear = -1;
+
+  for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
+    int qEntriesCnt = qtable.mlfQueue[qLevel].rear;
+    for(int qIndex = 0; qIndex < qEntriesCnt; qIndex++) {
+      if(pid == qtable.mlfQueue[qLevel].procsQueue[qIndex]->pid) {
+        p = qtable.mlfQueue[qLevel].procsQueue[qIndex];
+        foundQLevel = qLevel;
+        foundQIndex = qIndex;
+        foundQRear = qEntriesCnt;
+        break;
+      }
+    }
+    if(p != 0) break;
+  }
+
+  if(p == 0 || foundQLevel == -1) return -1; // process does not exist in queue table
+
+  acquire(&qtable.lock);
+
+  // delete process from mlfq table
+  for(int qIter = foundQIndex; qIter < foundQRear - 1; qIter++) {
+      qtable.mlfQueue[foundQLevel].procsQueue[qIter] = qtable.mlfQueue[foundQLevel].procsQueue[qIter + 1];
+  }
+  qtable.mlfQueue[foundQLevel].procsQueue[qtable.mlfQueue[foundQLevel].rear - 1] = 0;
+
+
+  qtable.mlfQueue[foundQLevel].rear -= 1;
+
+  release(&qtable.lock);
+
+  return 0;
+}
+
 struct proc* MLFQdequeue(int qLevel){
   if(qLevel < 0 || qLevel >= MAXQLEVEL) return 0;  // invalid queue level input, return null
   else if(qtable.mlfQueue[qLevel].rear == 0) return 0;  // queue does not have any process, return null
@@ -186,6 +234,7 @@ struct proc* MLFQdequeue(int qLevel){
     for(int i = 0; i < qtable.mlfQueue[qLevel].rear - 1; i++){
       qtable.mlfQueue[qLevel].procsQueue[i] = qtable.mlfQueue[qLevel].procsQueue[i + 1];
     }
+	  qtable.mlfQueue[qLevel].procsQueue[qtable.mlfQueue[qLevel].rear - 1] = 0;
     qtable.mlfQueue[qLevel].rear -= 1; // dequeue and shift is over, decrease rear
 
     release(&qtable.lock);
@@ -194,13 +243,17 @@ struct proc* MLFQdequeue(int qLevel){
     acquire(&qtable.lock);
 
     int dequeueIndex = -1;
+	  uint minArrivedTime = 0;
+
     for(int iterPrior = 0 ; iterPrior < MAXPRIORITY && dequeueIndex == -1; iterPrior++) {
+	  minArrivedTime = qtable.mlfQueue[BOTTOM].procsQueue[0]->arrivedTime;
       for(int i = 0; i < qtable.mlfQueue[BOTTOM].rear; i++){
-        if(qtable.mlfQueue[BOTTOM].procsQueue[i]->priority == iterPrior) {
-          dequeueIndex = i;
+        if(qtable.mlfQueue[BOTTOM].procsQueue[i]->priority == iterPrior && qtable.mlfQueue[BOTTOM].procsQueue[i]->arrivedTime < minArrivedTime) {
+        dequeueIndex = i;
           break;
         };
       }
+      if(minArrivedTime == qtable.mlfQueue[BOTTOM].procsQueue[0]->arrivedTime) dequeueIndex = 0;
     }
 
     p = qtable.mlfQueue[BOTTOM].procsQueue[dequeueIndex];
@@ -209,6 +262,8 @@ struct proc* MLFQdequeue(int qLevel){
     for(int i = dequeueIndex; i < qtable.mlfQueue[BOTTOM].rear - 1; i++){
       qtable.mlfQueue[BOTTOM].procsQueue[i] = qtable.mlfQueue[BOTTOM].procsQueue[i + 1];
     }
+	  qtable.mlfQueue[BOTTOM].procsQueue[qtable.mlfQueue[BOTTOM].rear - 1] = 0;
+
     qtable.mlfQueue[BOTTOM].rear -= 1;
 
     release(&qtable.lock);
@@ -325,6 +380,12 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  np->arrivedTime = ticks;
+  np->execTime = 0;
+  np->qLevel = TOP;
+  np->priority = MAXPRIORITY - 1;
+  np->isLock = UNLOCKED;
+
   MLFQenqueue(np, TOP);
 
   release(&ptable.lock);
@@ -804,10 +865,32 @@ void schedulerLock(int password){
   if(ltable.proc != 0) return;
 
   //TODO: update global tick: 추후 trap.c에서 lock을 호출한 proc의 pid와, myproc()의 pid가 같으면 lock에 성공한 것으로 판별하고 global tick을 초기화
-  
+  MLFQdeleteByPid(pid);
+
+  acquire(&ptable.lock);
+  curproc->isLock = LOCKED;
+  release(&ptable.lock);
+
   acquire(&ltable.lock);
   ltable.proc = curproc;
   release(&ltable.lock);
+}
+
+void schedulerLockDone(void){
+  struct proc* lockproc = ltable.proc;
+
+  acquire(&ltable.lock);
+  ltable.proc = 0;
+  release(&ltable.lock);
+
+  acquire(&ptable.lock);
+  lockproc->execTime = 0;
+  lockproc->priority = MAXPRIORITY - 1;
+  lockproc->isLock = UNLOCKED;
+
+  release(&ptable.lock);
+
+  MLFQfrontEnqueue(lockproc, TOP);
 }
 
 void schedulerUnlock(int password){  
@@ -821,13 +904,5 @@ void schedulerUnlock(int password){
 
   //TODO: lock되어있는 프로세스가 실행되는 동안은 다른 프로세스는 동작 못하고 있는 건가? 그럼 unlock함수는 무조건 lock된 프로세스(본인)가 호출하는건가??
   //TODO: kill process and enqueue in the rear of queue(use original funtion)
-  struct proc* lockproc = ltable.proc;
-
-  acquire(&ltable.lock);
-  ltable.proc = 0;
-  release(&ltable.lock);
-
-  lockproc->execTime = 0;
-  lockproc->priority = MAXPRIORITY - 1;
-  MLFQfrontEnqueue(lockproc, TOP);  
+  schedulerLockDone();
 }
