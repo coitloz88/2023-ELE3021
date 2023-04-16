@@ -550,34 +550,12 @@ scheduler(void)
   for(;;){
     // Enable interrupts on this processor.
     sti();
-
-    // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
-
-    for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
-      struct proc* targetProc = 0;
-
-      //TODO: check for higher level queue has new arrived RUNNABLE process
-      for(int prev = 0; prev <= qLevel; prev++) {
-        targetProc = schedulerChooseProcess(prev);
-
-        if(isValidProcess(targetProc)) {
-          qLevel = prev;
-          break;
-        }
-      }
-      // targetProc = schedulerChooseProcess(qLevel);
-
-      if(!isValidProcess(targetProc)
-          || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
-      
-      // cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
+    if(ltable.proc != 0) {
+      struct proc* targetProc = ltable.proc;
       c->proc = targetProc;
       switchuvm(targetProc);
+
+      acquire(&ptable.lock);
       targetProc->state = RUNNING;
 
       swtch(&(c->scheduler), targetProc->context);
@@ -586,10 +564,49 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue (끝났다면, 어차피 적절한 process를 고르는 과정에서 deprecate됨)
+      release(&ptable.lock);
     }
+    // Loop over process table looking for process to run.
+    else {    
+      acquire(&ptable.lock);
 
-    release(&ptable.lock);
+      for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
+        struct proc* targetProc = 0;
+
+        //TODO: check for higher level queue has new arrived RUNNABLE process
+        for(int prev = 0; prev <= qLevel; prev++) {
+          targetProc = schedulerChooseProcess(prev);
+
+          if(isValidProcess(targetProc)) {
+            qLevel = prev;
+            break;
+          }
+        }
+        // targetProc = schedulerChooseProcess(qLevel);
+
+        if(!isValidProcess(targetProc)
+            || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
+        
+        // cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
+
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = targetProc;
+        switchuvm(targetProc);
+        targetProc->state = RUNNING;
+
+        swtch(&(c->scheduler), targetProc->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+        MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue (끝났다면, 어차피 적절한 process를 고르는 과정에서 deprecate됨)
+      }
+
+      release(&ptable.lock);
+    }
 
   }
 }
