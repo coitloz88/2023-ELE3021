@@ -30,6 +30,9 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+void printProcess(const char* funcName, struct proc* targetProc) {
+cprintf("\n[%s log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", funcName, targetProc->pid, targetProc->qLevel, targetProc->state, targetProc->execTime, targetProc->priority);}
+
 void
 pinit(void)
 {
@@ -106,6 +109,7 @@ found:
   p->pid = nextpid++;
   p->priority = MAXPRIORITY - 1;
   p->execTime = 0;
+  p->isLock = UNLOCKED;
 
   release(&ptable.lock);
 
@@ -194,7 +198,7 @@ int MLFQdeleteByPid(int pid) {
   if(p == 0 || foundQLevel + foundQIndex + foundQRear < -1) return -1; // process does not exist in queue table
 
   acquire(&qtable.lock);
-  
+
   // delete process from mlfq table
   for(int qIter = foundQIndex; qIter < foundQRear - 1; qIter++) {
       qtable.mlfQueue[foundQLevel].procsQueue[qIter] = qtable.mlfQueue[foundQLevel].procsQueue[qIter + 1];
@@ -364,6 +368,10 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+
+  //TODO: fork시 execTime, priority, qLevel 초기화
+  printProcess("fork", np);
+
   MLFQenqueue(np, TOP);
 
   release(&ptable.lock);
@@ -526,30 +534,12 @@ scheduler(void)
   c->proc = 0;
   
   for(;;){
-    // Enable interrupts on this processor.
-    sti();
-
     // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
 
-    for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
-      struct proc* targetProc = 0;
+    if(ltable.proc != 0) { // locked process scheduling
+      acquire(&ptable.lock);
 
-      //TODO: check for higher level queue has new arrived RUNNABLE process
-      for(int prev = 0; prev <= qLevel; prev++) {
-        targetProc = schedulerChooseProcess(prev);
-
-        if(isValidProcess(targetProc)) {
-          qLevel = prev;
-          break;
-        }
-      }
-      // targetProc = schedulerChooseProcess(qLevel);
-
-      if(!isValidProcess(targetProc)
-          || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
-      
-      // cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
+      struct proc* targetProc = ltable.proc;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -564,10 +554,54 @@ scheduler(void)
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue (끝났다면, 어차피 적절한 process를 고르는 과정에서 deprecate됨)
+
+      release(&ptable.lock);
     }
 
-    release(&ptable.lock);
+    else { // mlfq scheduling
+      
+      // Enable interrupts on this processor.
+      sti();
+      acquire(&ptable.lock);
+
+      for(int qLevel = 0; qLevel < MAXQLEVEL; qLevel++) {
+        struct proc* targetProc = 0;
+
+        //TODO: check for higher level queue has new arrived RUNNABLE process
+        for(int prev = 0; prev <= qLevel; prev++) {
+          targetProc = schedulerChooseProcess(prev);
+
+          if(isValidProcess(targetProc)) {
+            qLevel = prev;
+            break;
+          }
+        }
+        // targetProc = schedulerChooseProcess(qLevel);
+
+        if(!isValidProcess(targetProc)
+            || targetProc->execTime >= TIME_QUANTUM(qLevel)) continue;
+        
+        // cprintf("\n[scheduling log] pid: %d, qLevel: %d, state: %d, execTime: %d, priority: %d\n", targetProc->pid, qLevel, targetProc->state, targetProc->execTime, targetProc->priority);
+
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = targetProc;
+        switchuvm(targetProc);
+        targetProc->state = RUNNING;
+
+        swtch(&(c->scheduler), targetProc->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+        MLFQenqueue(targetProc, qLevel); // 수행이 끝났든, 끝나지 않았든 enqueue (끝났다면, 어차피 적절한 process를 고르는 과정에서 deprecate됨)
+      }
+
+      release(&ptable.lock);
+    }
+
 
   }
 }
@@ -839,14 +873,37 @@ void schedulerLock(int password){
   }
   if(pid >= 0) return; 
   
-  //TODO: 이미 lock이 걸린 process가 있으면 ?
+  //~~이미 lock이 걸린 process가 있으면 ?~~ piazza에서 이런 케이스는 없다고 하셨으나 예외 처리는 해둠
   if(ltable.proc != 0) return;
+
+  //TODO: lock을 걸때, mlfq에서는 빼줘야함. 이때, proc->qLevel도 -1로 조정
+  MLFQdeleteByPid(pid);
 
   //TODO: update global tick: 추후 trap.c에서 lock을 호출한 proc의 pid와, myproc()의 pid가 같으면 lock에 성공한 것으로 판별하고 global tick을 초기화
   
   acquire(&ltable.lock);
+  curproc->isLock = LOCKED;
   ltable.proc = curproc;
   release(&ltable.lock);
+}
+
+void schedulerLockDone(void) {
+  //TODO: lock되어있는 프로세스가 실행되는 동안은 다른 프로세스는 동작 못하고 있는 건가? 그럼 unlock함수는 무조건 lock된 프로세스(본인)가 호출하는건가??
+  //TODO: kill process and enqueue in the rear of queue(use original funtion)
+  struct proc* lockproc = ltable.proc;
+
+  acquire(&ltable.lock);
+  ltable.proc = 0;
+  relelase(&ltable.lock);
+
+  acquire(&ptable.lock);
+  lockproc->execTime = 0;
+  lockproc->priority = MAXPRIORITY - 1;
+  lockproc->isLock = UNLOCKED;
+
+  release(&ptable.lock);
+
+  MLFQfrontEnqueue(lockproc, TOP);  
 }
 
 void schedulerUnLock(int password){  
@@ -858,15 +915,5 @@ void schedulerUnLock(int password){
     return;
   };
 
-  //TODO: lock되어있는 프로세스가 실행되는 동안은 다른 프로세스는 동작 못하고 있는 건가? 그럼 unlock함수는 무조건 lock된 프로세스(본인)가 호출하는건가??
-  //TODO: kill process and enqueue in the rear of queue(use original funtion)
-  struct proc* lockproc = ltable.proc;
-
-  acquire(&ltable.lock);
-  ltable.proc = 0;
-  release(&ltable.lock);
-
-  lockproc->execTime = 0;
-  lockproc->priority = MAXPRIORITY - 1;
-  MLFQfrontEnqueue(lockproc, TOP);  
+  schedulerLockDone();
 }

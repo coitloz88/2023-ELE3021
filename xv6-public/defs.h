@@ -122,6 +122,7 @@ void            wakeup(void*);
 void            yield(void);
 
 // mlfq scheduler in proc.c
+void            printProcess(const char* funcName, struct proc* targetProc);
 struct proc*    schedulerChooseProcess(int qLevel);
 int             isValidProcess(struct proc* p);
 void            increaseExecTime(struct proc* p);
@@ -129,6 +130,7 @@ void            priorityBoosting(void);
 int             getLevel(void);
 void            setPriority(int pid, int priority);
 void            schedulerLock(int password);
+void            schedulerLockDone(void);
 void            schedulerUnlock(int password);
 
 // queue handler in proc.c

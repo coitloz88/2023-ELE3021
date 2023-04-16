@@ -128,7 +128,7 @@ int sys_schedulerLock(void){
   return 0;
 }
 
-int sys_schedulerLock(void){
+int sys_schedulerUnlock(void){
   int password = 0;
   if(argint(0, &password) != SLPASSWORD) {
     struct proc* p = myproc();

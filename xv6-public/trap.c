@@ -54,8 +54,12 @@ trap(struct trapframe *tf)
       acquire(&tickslock);
       ticks++;
       wakeup(&ticks);
+      if(ticks % 100 == 0) {
+        ticks = 0;
+        if(myproc()->isLock) schedulerLockDone();
+        priorityBoosting(); 
+      }
       release(&tickslock);
-      if(ticks % 100 == 0) priorityBoosting();
     }
     lapiceoi();
     break;
@@ -86,9 +90,11 @@ trap(struct trapframe *tf)
     break;
   case T_SCHEDULER_LOCK:
     cprintf("scheduler lock called!\n");
+    schedulerLock(SLPASSWORD);
     break;
   case T_SCHEDULER_UNLOCK:
     cprintf("scheduler unlock called!\n");
+    schedulerUnlock(SLPASSWORD);
     break;
   //PAGEBREAK: 13
   default:
