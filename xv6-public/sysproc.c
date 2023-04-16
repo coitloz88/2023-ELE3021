@@ -138,6 +138,6 @@ int sys_schedulerLock(void){
     return -1;
   };
 
-  schedulerUnLock(password);
+  schedulerUnlock(password);
   return 0;
 }

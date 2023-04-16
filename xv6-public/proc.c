@@ -810,7 +810,7 @@ void schedulerLock(int password){
   release(&ltable.lock);
 }
 
-void schedulerUnLock(int password){  
+void schedulerUnlock(int password){  
   if(password != SLPASSWORD) {
     struct proc* p = myproc();
     cprintf("[scheduler unlock] Wrong Password!\n");
